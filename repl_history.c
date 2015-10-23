@@ -271,7 +271,7 @@ int repl_history_init() {
 
 void repl_history_display() {
   if (hist == NULL) {
-    fprintf(stderr, "NO HISTORY TO DISPLAY... ");
+    fprintf(stderr, "NO HISTORY TO DISPLAY...\n");
   } else {
     fprint_bitmap (stderr, hist->bitmap);
     fprint_datablocks (stderr, hist->datablocks);
