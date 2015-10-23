@@ -31,4 +31,6 @@ int repl_history_delete(int);
 int repl_history_teardown();
 /* free memory etc... */
 
+void repl_history_display();
+
 #endif
