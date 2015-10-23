@@ -6,8 +6,15 @@
 #ifndef __REPL_HISTORY_H__
 #define __REPL_HISTORY_H__
 
-void repl_history_init();
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
+
+
+int repl_history_init();
 /* allocate memory for the history struct */
+/* return 1 on success, 0 on failure */
 
 int repl_history_insert(char*);
 /* try to insert a line into history */
