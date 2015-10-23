@@ -1,5 +1,10 @@
+
+
 /* declare all functions static apart from the following */
 /* not 100% decided on return types */
+
+#ifndef __REPL_HISTORY_H__
+#ifndef __REPL_HISTORY_H__
 
 void repl_history_init();
 /* allocate memory for the history struct */
@@ -18,3 +23,5 @@ int repl_history_delete(int);
 
 int repl_history_teardown();
 /* free memory etc... */
+
+#endif
