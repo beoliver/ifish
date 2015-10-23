@@ -202,7 +202,7 @@ static void write_line_to_datablocks(char* datablocks, char* line, int blocks_re
     /* block_offset is in the range 0 - 504 (multiples of 8) */
     blockp = datablocks + block_offset;
     
-#ifdef DEBUG    
+#ifdef CLEAN_DATABLOCKS    
     assert(*blockp == 0);
 #endif
     
