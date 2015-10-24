@@ -5,9 +5,6 @@
 
 int main(int argc, char** argv) {
 
-/* *************************************************************************** */
-
-int main() {
   history_init();
   char* line1 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
   char* line2 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -28,7 +25,7 @@ int main() {
   history_insert(line1);
   printf("%s\n", line1);
   char xs[121];
-  delete_last_n_history_items(1);
+  history_delete_last_n_items(1);
   int i = history_get_item(0, xs);
   if (i == 0) {
     printf("%s\n",xs);
@@ -49,6 +46,5 @@ int main() {
   /* history_insert(line15); */
 }
 
-/* *************************************************************************** */
 
-}
+
