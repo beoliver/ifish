@@ -15,10 +15,12 @@ void history_insert(char*)
 int  history_get_item(int, char*)
 int  history_delete_last_n_items(int)
 ```
-All other functions are static.
+and if I get round to it
+```int history_teardown()```
+All other functions in ```repl_history``` are static.
 
 ```repl_parsing``` handles both searching the users path and tokenizing lines. It provides the following interface:
 ```
-char* parsing_search_path(char*)
+char*        parsing_search_path(char*)
 repl_params* parsing_tokenize(char*)
 ```
