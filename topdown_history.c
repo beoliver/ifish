@@ -45,6 +45,7 @@ static struct mem_meta*     mem_m;
 void history_init();
 void history_insert(char*);
 int  get_history_item(int, char*);
+int  delete_last_n_history_items(int);
 
 /* *************************************************************************** */
 
@@ -66,11 +67,14 @@ int main() {
   char* line14 = "n";
   char* line15 = "o";
 
-  history_insert(line5);
-  printf("%s\n", line5);
+  history_insert(line1);
+  printf("%s\n", line1);
   char xs[121];
+  delete_last_n_history_items(1);
   int i = get_history_item(0, xs);
-  printf("%s\n",xs);
+  if (i == 0) {
+    printf("%s\n",xs);
+  }
   
   /* history_insert(line3); */
   /* history_insert(line4); */
@@ -267,11 +271,28 @@ static void write_line_to_mem_blocks(char* line, int n, int* meta_index_buffer) 
 static void get_line_from_mem_blocks(int n, int* meta_index_buffer, char* buffer) {
 
   /* ASSUME buffer is at least 121 bytes long */
-  int i;  
+  
+  int i;
+  
   for (i = 0; i < n; i++) {
     strncpy(buffer+(i*8), mem_b->blocks+(meta_index_buffer[i]*8), 8);
   }
+  
   memset(buffer+(i*8),'\0',1);
+}
+
+/* --------------------------------------------------------------------------- */
+
+static int delete_most_recent() {
+  if (mem_m == NULL) {
+    return (-1);
+  }
+  struct mem_meta* temp = mem_m;
+  mem_m = mem_m->next;
+  dealloc_n_blocks(temp->size, temp->block_addrs);
+  free(temp);
+
+  return 0;
 }
 
 /* --------------------------------------------------------------------------- */
@@ -405,6 +426,19 @@ int get_history_item(int n, char buffer[121]) {
 
   return 0;
   
+}
+
+/* --------------------------------------------------------------------------- */
+
+int delete_last_n_history_items(int n) {
+  /* delete from head of list... */   
+  while (n > 0) {
+    int ret = delete_most_recent();
+    if (ret == (-1)) {
+      return (-1);
+    }
+  }
+  return 0;
 }
 
 /* --------------------------------------------------------------------------- */
