@@ -8,9 +8,14 @@
 /* --------------------------------------------------------------------------- */
 
 #define DEBUG
-/* #define DEBUG_STRICT */
-/* #define DEBUG_INFO */
-/* #define CLEAN_DATABLOCKS */
+
+#define DEBUG_STRICT
+
+#define DEBUG_INFO
+
+#define CLEAN_DATABLOCKS
+
+#define DONT_FORK_BOMB_YOURSELF
 
 #define DEBUG_OUT stderr
 
@@ -39,6 +44,7 @@ static struct mem_meta*     mem_m;
 
 void history_init();
 void history_insert(char*);
+int  get_history_item(int, char*);
 
 /* *************************************************************************** */
 
@@ -59,21 +65,26 @@ int main() {
   char* line13 = "mmmmmmmmmm";
   char* line14 = "n";
   char* line15 = "o";
-  history_insert(line1);
-  history_insert(line2);
-  history_insert(line3);
-  history_insert(line4);
+
   history_insert(line5);
-  history_insert(line6);
-  history_insert(line7);
-  history_insert(line8);
-  history_insert(line9);
-  history_insert(line10);
-  history_insert(line11);
-  history_insert(line12);
-  history_insert(line13);
-  history_insert(line14);
-  history_insert(line15);
+  printf("%s\n", line5);
+  char xs[121];
+  int i = get_history_item(0, xs);
+  printf("%s\n",xs);
+  
+  /* history_insert(line3); */
+  /* history_insert(line4); */
+  /* history_insert(line5); */
+  /* history_insert(line6); */
+  /* history_insert(line7); */
+  /* history_insert(line8); */
+  /* history_insert(line9); */
+  /* history_insert(line10); */
+  /* history_insert(line11); */
+  /* history_insert(line12); */
+  /* history_insert(line13); */
+  /* history_insert(line14); */
+  /* history_insert(line15); */
 }
 
 /* *************************************************************************** */
@@ -134,10 +145,8 @@ static void print_meta_nodes () {
     int node_count = 1;
     struct mem_meta* temp = mem_m;
     while (temp != NULL) {
-#ifdef DEBUG_INFO
       fprintf(DEBUG_OUT, "NODE @ position %d has SIZE of %d BLOCKS : first index is %d\n",
 	      node_count, temp->size, temp->block_addrs[0]);
-#endif      
       temp = temp->next;
       node_count++;
     }
@@ -255,6 +264,18 @@ static void write_line_to_mem_blocks(char* line, int n, int* meta_index_buffer) 
 
 /* --------------------------------------------------------------------------- */
 
+static void get_line_from_mem_blocks(int n, int* meta_index_buffer, char* buffer) {
+
+  /* ASSUME buffer is at least 121 bytes long */
+  int i;  
+  for (i = 0; i < n; i++) {
+    strncpy(buffer+(i*8), mem_b->blocks+(meta_index_buffer[i]*8), 8);
+  }
+  memset(buffer+(i*8),'\0',1);
+}
+
+/* --------------------------------------------------------------------------- */
+
 void history_init() {
   mem_b = malloc(sizeof(struct mem_blocks));
   memset(mem_b->bitmap, 0, 8);
@@ -330,19 +351,60 @@ void history_insert(char* line) {
 #ifdef DEBUG_STRICT
   assert (node->next == NULL);
 #endif
+  
   struct mem_meta* temp = mem_m;
   mem_m = node;
   node->next = temp;
+  
 #ifdef DEBUG_STRICT
   assert (node->next == temp);
 #endif
 
+#ifdef DEBUG
   print_bitmap();
   print_datablocks();
-  print_meta_nodes();
+#endif
   
+#ifdef DEBUG_INFO
+  print_meta_nodes();
+#endif  
 }
 
+/* --------------------------------------------------------------------------- */
 
+int get_history_item(int n, char buffer[121]) {
+
+  /* where n is the nth YOUNGEST item in memory */ 
+  
+  /* make sure that we do not allow recursive calls. */
+  /* If the first thing we type is 'h 0'             */
+  /* then we will return the call to 'h 0'           */
+  /* this will call again, and again ...             */
+    
+  struct mem_meta* temp = mem_m;
+  if (temp == NULL) {
+    fprintf(stderr, "no history exists yet... bold move cotton");    
+    return (-1);
+  }
+  
+  while (n > 0) {
+    temp = temp->next;
+    if (temp == NULL) {
+      fprintf(stderr, "maximm history limit: %d", n);
+      return (-1);
+    }
+    n--;
+  }
+
+  /* get the blocks given temp->block_addrs */
+  get_line_from_mem_blocks(temp->size, temp->block_addrs, buffer);
+
+#ifdef DONT_FORK_BOMB_YOURSELF
+  /* check that return value is not a call to history */
+#endif
+
+  return 0;
+  
+}
 
 /* --------------------------------------------------------------------------- */
