@@ -1,9 +1,5 @@
-
-#include <string.h>
-#include <stdlib.h>
-
-#include <sys/stat.h>
 #include "repl_parsing.h"
+#include <sys/stat.h>
 
 
 char* search_user_path(char* param) {

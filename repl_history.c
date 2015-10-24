@@ -1,176 +1,129 @@
 #include "repl_history.h"
-#include <errno.h>
 
-#define BITMAP_BYTE_COUNT 8
-#define DATABLOCKS_BYTE_COUNT 512
-#define HISTORY_SLOT_COUNT 64
-#define DATABLOCK_BYTE_COUNT 8
+/* --------------------------------------------------------------------------- */
 
-#define DEBUG
-/* #define CLEAN_DATABLOCKS */
+struct mem_blocks {
+  char bitmap[8];
+  char blocks[512];
+  int  space;
+} ;
 
-struct metadata {
-  struct metadata* next;
-  int  blockIndexes[15];
-  int  used_block_count;
-};
+struct mem_meta {
+  struct mem_meta* next;
+  int  block_addrs[15];
+  int  size;
+} ;
 
-struct history {
-  char bitmap[BITMAP_BYTE_COUNT];
-  char datablocks[DATABLOCKS_BYTE_COUNT];
-  int  free_block_count;
-  struct metadata* meta;
-};
+/* --------------------------------------------------------------------------- */
 
-static struct history* hist; 
+/* use two sepeare structs. as all history managment is done */
+/* within the scope of topdown_history.c, we don't need to */
+/* worry too much about passing state. */
 
+static struct mem_blocks*   mem_b;
+static struct mem_meta*     mem_m;
 
-/* HELPERS */
+/* --------------------------------------------------------------------------- */
 
-static void fprint_bitmap_block (FILE* stream, char byte) {
-  /* prints the sequential bits of the char FROM LEFT TO RIGHT */
+static void print_char_as_binary (char byte, FILE* stream) {
+  /* prints the sequential bits of the char from left to right */
   for (char offset = 7; offset >= 0; offset--) {
     fputc( byte & (1 << offset) ? '1' : '0', stream ) ;   
   }
 }
 
-
-static void fprint_bitmap (FILE* stream, char* bitmap) {
+static void print_bitmap () {
 #ifdef DEBUG  
-  fprintf(stream, "DEBUG - BITMAP:\n\n");  
-#endif
-  int position = 0;
-  
+  fprintf(DEBUG_OUT, "DEBUG - BITMAP:\n\n");
+#endif  
+  int position = 0;  
   for (int i = 0; i < 2; i++) {
-    fputc('\n', stream);
+    fputc('\n', DEBUG_OUT);
     for (int j = 0; j < 4; j++) {
-      fprint_bitmap_block(stream, bitmap[position]);
+      print_char_as_binary(mem_b->bitmap[position], DEBUG_OUT);
       position++;
     }
   }
-  fprintf(stream,"\n\n");
+  fprintf(DEBUG_OUT,"\n\n");
 }
 
+/* --------------------------------------------------------------------------- */
 
-
-static void fprint_8byte_datablock (FILE* stream, char* block) {
-  /* assumes that block pointer is correct */
-  /* does not protect from printing null   */
-  for (int i = 0; i < 8; i++) { 
-    if ((block[i] == 0) || (block[i] == '\n'))   {
-      fputc(' ', stream);
-    } else {
-      fputc(block[i], stream);
-    }
-  }
-}
-
-
-static void fprint_datablocks (FILE* stream, char* datablocks) {
+static void print_datablocks () {
 #ifdef DEBUG  
-  fprintf(stream, "DEBUG - DATABLOCKS:\n\n");
-#endif
-  char* p = datablocks;
-  
+  fprintf(DEBUG_OUT, "DEBUG - DATABLOCKS:\n\n");
+#endif  
+  char* b = mem_b->blocks;  
   for (int row_count = 0; row_count < 16; row_count++) {    
-    fprintf(stream, "##");   
-    for (int column_count = 0; column_count < 4; column_count++) {        
-      fprint_8byte_datablock(stream, p);
-      fprintf(stream, "##");
-      p += 8;
+    fprintf(DEBUG_OUT, "##");   
+    for (int column_count = 0; column_count < 4; column_count++) {
+      for (int i = 0; i < 8; i++) {
+	if ((b[i] == 0) || (b[i] == '\n'))   {
+	  fputc(' ', DEBUG_OUT);
+	} else {
+	  fputc(b[i], DEBUG_OUT);
+	}
+      }	  
+      fprintf(DEBUG_OUT, "##");
+      b += 8;
     }
-    fputc('\n', stream);
+    fputc('\n', DEBUG_OUT);
   }
-  fputc('\n', stream);
+  fputc('\n', DEBUG_OUT);
 }
 
+/* --------------------------------------------------------------------------- */
 
-static int required_blocks(int len) {
-  /* how many 8 byte blocks are required to store a string of length len */
-  return (len % DATABLOCK_BYTE_COUNT) ? 1+(len / DATABLOCK_BYTE_COUNT) : (len / DATABLOCK_BYTE_COUNT);
-}
-
-static void delete_blocks_at(char* datablocks, int* indices, int indices_length) {
-  /* indices are in the range of 0 - 63 (i.e indices[n] 'refers' to a datablock index) */
-  /* we don't actually need to write over our freed blocks, as they are not in the bit map */
-  /* they will eventually be written over. As we use strncpy(block, lineChunk, 8) the last block */
-  /* will end with 0's (check man pages) */
-  /* The ONLY time we would over write them is to */
-  /* pretty print the debug view of memory (which is not a good reason imho) */
-  for (int i = 0; i < indices_length; i++) {
-    memset(datablocks+(indices[i]*8), 0, 8);
-  }
-}
-
-
-static void flip_bit_at(char* bitmap, int index) {
-  /* index is in the range of 0 - 63 (i.e index 'refers' to a datablock index) */
-  char* byte = bitmap + (index / 8); 
-  *byte = *byte ^ (1 << (7 - (index % 8)));
-}
-
-static void flip_bits_at(char* bitmap, int* indices, int indices_length) {
-  /* indices are in the range of 0 - 63 (i.e indices[n] 'refers' to a datablock index) */
-  for (int i = 0; i < indices_length; i++) {
-    flip_bit_at(bitmap, indices[i]);
+static void print_meta_nodes () {
+  if (mem_m == NULL) {
+    fprintf(DEBUG_OUT, "NO NODES TO PRINT\n");
+  } else {
+    int node_count = 1;
+    struct mem_meta* temp = mem_m;
+    while (temp != NULL) {
+      fprintf(DEBUG_OUT, "NODE @ position %d has SIZE of %d BLOCKS : first index is %d\n",
+	      node_count, temp->size, temp->block_addrs[0]);
+      temp = temp->next;
+      node_count++;
+    }
   }
 }
 
+/* --------------------------------------------------------------------------- */
 
-
-static int free_oldest_item() {
-  if (hist->meta == NULL) {
-    /* nothing to do */
-    return 0;
-  }  
-  flip_bits_at(hist->bitmap, hist->meta->blockIndexes, hist->meta->used_block_count);
-#ifdef CLEAN_DATABLOCKS
-  delete_blocks_at(hist->datablocks, hist->meta->blockIndexes, hist->meta->used_block_count);
-#endif
-  hist->free_block_count += hist->meta->used_block_count;  
-  /* and now we can remove the meta pointer */
-  struct metadata* temp = hist->meta;
-  hist->meta = hist->meta->next;
-  free(temp->blockIndexes);
-  free(temp);
-  return 0;
-}
-
-static void find_and_allocate_n_bits(char* bitmap, int n, int* index_buffer) {
-
-  /* this function ONLY modifies the BITMAP and the INDEX_BUFFER */
-  /* This function will ONLY WORK if : */
-     /* 1. there exist N or more BITS set to 0 */
-     /* 2. index_buffer has memory allocated for N or more INT's */
-  /* this is ONLY guaranteed by first testing the memory and freeing DATABLOCKS AND BITS before */
-  /* IT IS NOT THIS FUNCTIONS JOB TO DELETE BITS. */
-  /* IT IS NOT THIS FUNCTIONS JOB TO INSERT DATABLOCKS */
+static void alloc_n_blocks(int n, int* meta_index_buffer) {
   
-  /* read through the bitmap, when we find a free bit, we do two things */
-  /*   1. FLIP it */
-  /*   2. add index to index_buffer */
-
-#ifdef DEBUG  
-  assert(index_buffer != NULL);
-  assert(bitmap != NULL);
-#endif
+  /* Where n is the number of bits to allocate.                    */
+  /* it is ASSUMED that THERE EXISTS AT LEAST n bits with value 0. */
+  /* Searches the bitmap for n values equal to 0. When a 0 valued  */
+  /* bit is found in the bitmap it is set to 1. The bits INDEX is  */
+  /* stored in the meta_index_buffer.                              */
+  /* the mem_b space field (int) is decremented                    */
   
+  /* NOTE: the index VALUE is in the range 0-63                    */
+  /* It is an 'block index' that all other functions must          */
+  /* decide how to interpret                                       */
+
+  char* bitmap = mem_b->bitmap; 
   int block_index = 0;
-  int* arrayp = index_buffer;
-
-  for (int byte_pos = 0; byte_pos < BITMAP_BYTE_COUNT; byte_pos++) {
+  int* arrayp = meta_index_buffer;
+  for (int byte_pos = 0; byte_pos < 8; byte_pos++) {
     for (char offset = 7; offset >= 0; offset--) {
       char* byte = bitmap + byte_pos;
       char  mask = 1 << offset;
       if ((*byte & mask) == 0) {
-	/* block is CONSIDERED free */
-	/* flip the bit in the bitmap and write the block_index to index_buffer */
+	/* flip the bit in the bitmap, write the meta_index_buffer */
+	/* and decrement mem_b space (int) field by one            */
 	*byte = *byte ^ mask;
 	*arrayp = block_index;
-	/* test to see if n == 0, if so just return as work is complete */
+	mem_b->space--;
+#ifdef DEBUG_INFO
+	fprintf(DEBUG_OUT, "index saved as: %d\n", block_index);
+#endif
 	if ((--n) == 0) {
 	  return;
 	}
+	/* move meta_index_buffer pointer forwards */
 	arrayp++;
       }
       /* we allways increment the block_index */
@@ -179,147 +132,245 @@ static void find_and_allocate_n_bits(char* bitmap, int n, int* index_buffer) {
   }
 }
 
+/* --------------------------------------------------------------------------- */
 
+/* we use XOR which allows for simple flipping. We could think about using NAND */
+/* which would mean that we ONLY deallocate bits set to 1. */
 
-
-static void write_line_to_datablocks(char* datablocks, char* line, int blocks_required, int* index_buffer) {
+static void dealloc_n_blocks(int n, int* meta_index_buffer) {
   
-  /* we ASSUME that we will never overwrite data, i.e all block_indexes required are free */
+  /* where n is the number of items to read from meta_index_buffer */
+  /* THE BIT VALUES ARE NOT TESTED. Any bit located at a position  */
+  /* refered to by an index in meta_index_buffer will be fliped.   */
+  /* the mem_b space field (int) is incremented                    */
   
-#ifdef DEBUG
-  assert(datablocks != NULL);
+  char* bitmap = mem_b->bitmap;
+  for (int i = 0; i < n; i++) {
+    
+    /* As the meta_index_buffer values are in the range 0-63 we    */
+    /* must divide the values by 8 to map them to the 8 byte       */
+    /* bitmap. This gives us the byte that we need. By taking the  */
+    /* values modulo 8, we calculate the offset (bit position)     */
+    /* shift 0000001 left by 7-offset (left to right) and xor      */
+    
+    char* byte = bitmap + (meta_index_buffer[i] / 8);
+    *byte = *byte ^ (1 << (7 - (meta_index_buffer[i] % 8)));
+    mem_b->space++;
+
+#ifdef CLEAN_DATABLOCKS
+    /* overwrite the associated datablocks with 0. Not actually needed, */
+    /* as we use the bitmap and the meta data. But in case it is */
+    /* 'required'  for the oblig the flag can be set */
+    memset(mem_b->blocks+(meta_index_buffer[i] * 8), 0, 8);
+#endif
+    
+  }
+}
+
+/* --------------------------------------------------------------------------- */
+
+static void write_line_to_mem_blocks(char* line, int n, int* meta_index_buffer) {
+  
+  /* where n is the number of items to read from meta_index_buffer */
+  /* multiply meta_index_buffer values by 8 to get relative byte   */
+  /* position in the datablock memory (512 bytes in total)         */
+  
+#ifdef DEBUG_STRICT
+  assert(mem_b->blocks != NULL);
   assert(line != NULL);
-  assert(index_buffer != NULL);
+  assert(meta_index_buffer != NULL);
 #endif
   
-  int block_offset;
-  char* blockp;
+  char* offset_blockp;
   char* linep = line;
   
-  for (int i = 0; i < blocks_required; i++) {
-    /* at the moment indexes are in the range 0 - 63 */
-    block_offset = 8 * index_buffer[i];
-    /* block_offset is in the range 0 - 504 (multiples of 8) */
-    blockp = datablocks + block_offset;
-    
-#ifdef CLEAN_DATABLOCKS    
-    assert(*blockp == 0);
-#endif
-    
-    strncpy(blockp, linep, 8);
-    linep += 8;
-  }  
-}
-
-
-
-static void insert(char line[121], int required_blocks) {
-  struct metadata* m = hist->meta;
-  while (m != NULL) {
-      m = m->next;
-    }
-  m = malloc (sizeof(struct metadata));
-  m->used_block_count = required_blocks;
-  find_and_allocate_n_bits(hist->bitmap, required_blocks, m->blockIndexes);
-  write_line_to_datablocks(hist->datablocks, line, required_blocks, m->blockIndexes);
-  }
-
-
-
-/* REPL_HISTORY_INTERFACE */
-
-int repl_history_init() {
-
-  /* am i going over the top? I've never really been a defensive programmer */
+  /* use strncpy(char * dst, const char * src, size_t len)         */
+  /* from the man pages: If src is less than len characters long,  */
+  /* the REMAINDER OF DST IS FILLED WITH `\0' CHARACTERS.          */
+  /* Otherwise, dst is not terminated.                             */
   
-  int errv;
-  char* error_message;
-  hist = malloc(sizeof(struct history));
-  if (hist == NULL) {
-    errv = errno;
-    error_message = strerror(errv);
-    fprintf(stderr, "repl_history_init() could not allocate history memory: %s\n",
-	    error_message);
-    return -1;
+  /* means that we never need to set datablocks to 0 when deleting */
+  
+  for (int i = 0; i < n; i++) {	
+    offset_blockp = mem_b->blocks+(8 * meta_index_buffer[i]);
+    strncpy(offset_blockp, linep, 8);
+    linep += 8;
   }
-  memset(hist->bitmap, 0, BITMAP_BYTE_COUNT);
-  if (hist->bitmap[0] != 0) {
-    errv = errno;
-    error_message = strerror(errv);
-    fprintf(stderr, "repl_history_init() could not set bitmap values to 0: %s\n",
-	    error_message);
-    free(hist->bitmap);
-    free(hist->datablocks);
-    free(hist);
-    return -1;
+}
+
+/* --------------------------------------------------------------------------- */
+
+static void get_line_from_mem_blocks(int n, int* meta_index_buffer, char* buffer) {
+
+  /* ASSUME buffer is at least 121 bytes long */
+  
+  int i;
+  
+  for (i = 0; i < n; i++) {
+    strncpy(buffer+(i*8), mem_b->blocks+(meta_index_buffer[i]*8), 8);
   }
-  memset(hist->datablocks, 0, DATABLOCKS_BYTE_COUNT);
-  if (hist->datablocks[0] != 0) {
-    errv = errno;
-    error_message = strerror(errv);
-    fprintf(stderr, "repl_history_init() could not set datablock values to 0: %s\n",
-	    error_message);    
-    free(hist->bitmap);
-    free(hist->datablocks);
-    free(hist);
-    return -1;
+  
+  memset(buffer+(i*8),'\0',1);
+}
+
+/* --------------------------------------------------------------------------- */
+
+static int delete_most_recent() {
+  if (mem_m == NULL) {
+    return (-1);
   }
-  hist->free_block_count = HISTORY_SLOT_COUNT;
+  struct mem_meta* temp = mem_m;
+  mem_m = mem_m->next;
+  dealloc_n_blocks(temp->size, temp->block_addrs);
+  free(temp);
+
   return 0;
 }
 
+/* --------------------------------------------------------------------------- */
 
-void repl_history_display() {
-  if (hist == NULL) {
-    fprintf(stderr, "NO HISTORY TO DISPLAY...\n");
-  } else {
-    fprint_bitmap (stderr, hist->bitmap);
-    fprint_datablocks (stderr, hist->datablocks);
-  }
+void history_init() {
+  mem_b = malloc(sizeof(struct mem_blocks));
+  memset(mem_b->bitmap, 0, 8);
+  memset(mem_b->blocks, 0, 512);
+  mem_b->space = 64; /* should this be set to 63?  */
+  mem_m = NULL;  
 }
 
+/* --------------------------------------------------------------------------- */
 
+void history_insert(char* line) {
+  
+  int len = strlen(line);
+  int blocks_required = (len % 8) ? 1+(len / 8) : (len / 8);
+  
+#ifdef DEBUG_INFO
+  fprintf(DEBUG_OUT, "new insert has %d chars and requires %d blocks\n", len, blocks_required);
+  fprintf(DEBUG_OUT, "there are currently %d free blocks\n", mem_b->space);
+#endif  
+#ifdef DEBUG_STRICT
+  assert ((len <= 120) && (blocks_required <= 15)) ;
+#endif  
 
-int repl_history_insert(char line[121]) {
-  int errv;
-  char* error_message;
-  int rq = required_blocks(strlen(line));
-#ifdef DEBUG
-  fprintf(stderr, "required blocks for line: %s = %d\n", line, rq);
+  if (mem_b->space < blocks_required) {
+    
+    /* need to dealloc space and remove nodes before continuing   */
+    /* REMEMBER -- the OLDEST item is the last in the linked list */
+    
+    while (mem_b->space < blocks_required) {
+#ifdef DEBUG_STRICT		
+      assert (mem_m != NULL);
 #endif
-  if (rq <= hist->free_block_count) {
-    /* we can insert straight away */
-    insert(line, rq);
-    return 0;
-  } else {
-    /* we need to free memory before inserting */
-    int fr;
-    while (rq > hist->free_block_count) {
-      int fbc = hist->free_block_count;
-      fr = free_oldest_item();
-      if ((fr != 0) || (fbc == hist->free_block_count)) {
-	error_message = strerror(errv);
-	fprintf(stderr, "repl_history_insert() failed while freeing memory: %s\n",
-		error_message);
-	return -1;
-      }      
+      /* need to get to the last element                        */
+      
+      struct mem_meta* temp1 = NULL;
+      struct mem_meta* temp2 = mem_m;
+      
+      while (temp2->next != NULL) {
+	temp1 = temp2;
+	temp2 = temp2->next;
+      }
+      
+      if (temp1 != NULL) {
+	/* then temp2 IS NOT the root struct                    */
+	/* let's delete temp2                                   */
+	dealloc_n_blocks(temp2->size, temp2->block_addrs);
+	/* NEVER TRY TO 'FREE' THE BLOCK_ADDRS !!! */
+	free(temp2);
+	temp1->next = NULL;
+      } else {
+	/* then temp2 IS the root struct     */
+#ifdef DEBUG_STRICT
+	assert(temp2 == mem_m);
+#endif
+	dealloc_n_blocks(mem_m->size, mem_m->block_addrs);
+	free(mem_m);
+	mem_m = NULL;
+      }
     }
   }
-  /* we can now insert */
-  insert(line, rq);
+  /* we now have the required blocks. */
+  /* insert into the HEAD of the linked list */
+  struct mem_meta* node = malloc(sizeof(struct mem_meta));	
+  if (node == NULL) {
+    perror("meta malloc :");
+  }
+  node->size = blocks_required;
+  node->next = NULL;
+
+  alloc_n_blocks(blocks_required, node->block_addrs);
+  write_line_to_mem_blocks(line, blocks_required, node->block_addrs);
+			   
+#ifdef DEBUG_STRICT
+  assert (node->next == NULL);
+#endif
+  
+  struct mem_meta* temp = mem_m;
+  mem_m = node;
+  node->next = temp;
+  
+#ifdef DEBUG_STRICT
+  assert (node->next == temp);
+#endif
+
+#ifdef DEBUG
+  print_bitmap();
+  print_datablocks();
+#endif
+  
+#ifdef DEBUG_INFO
+  print_meta_nodes();
+#endif  
+}
+
+/* --------------------------------------------------------------------------- */
+
+int history_get_item(int n, char buffer[121]) {
+
+  /* where n is the nth YOUNGEST item in memory */ 
+  
+  /* make sure that we do not allow recursive calls. */
+  /* If the first thing we type is 'h 0'             */
+  /* then we will return the call to 'h 0'           */
+  /* this will call again, and again ...             */
+    
+  struct mem_meta* temp = mem_m;
+  if (temp == NULL) {
+    fprintf(stderr, "no history exists yet... bold move cotton");    
+    return (-1);
+  }
+  
+  while (n > 0) {
+    temp = temp->next;
+    if (temp == NULL) {
+      fprintf(stderr, "maximm history limit: %d", n);
+      return (-1);
+    }
+    n--;
+  }
+
+  /* get the blocks given temp->block_addrs */
+  get_line_from_mem_blocks(temp->size, temp->block_addrs, buffer);
+
+#ifdef DONT_FORK_BOMB_YOURSELF
+  /* check that return value is not a call to history */
+#endif
+
+  return 0;
+  
+}
+
+/* --------------------------------------------------------------------------- */
+
+int history_delete_last_n_items(int n) {
+  /* delete from head of list... */   
+  while (n > 0) {
+    int ret = delete_most_recent();
+    if (ret == (-1)) {
+      return (-1);
+    }
+  }
   return 0;
 }
 
-
-
-int repl_history_get(int n, char* buffer) {
-  return 0;
-}
-
-int repl_history_delete(int n) {
-  return 0;
-}
-
-int repl_history_teardown() {
-  return 0;
-}
+/* --------------------------------------------------------------------------- */
