@@ -1,6 +1,7 @@
 #ifndef __REPL_H__
 #define __REPL_H__
 
+#include "safefork.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -8,11 +9,11 @@
 #include <assert.h>
 #include <ctype.h>
 
-#define DEBUG
-#define DEBUG_STRICT
-#define DEBUG_INFO
-#define CLEAN_DATABLOCKS
-#define DONT_FORK_BOMB_YOURSELF
+/* #define DEBUG */
+/* #define DEBUG_STRICT */
+/* #define DEBUG_INFO */
+/* #define CLEAN_DATABLOCKS */
+/* #define DONT_FORK_BOMB_YOURSELF */
 
 #define DEBUG_OUT stderr
 
@@ -22,5 +23,6 @@
 #define BUILTIN_DELETE_HISTORY  1
 #define BUILTIN_EXECUTE_HISTORY 2
 #define RUN_IN_BACKGROUND       3
+#define USER_EXIT               4
 
 #endif

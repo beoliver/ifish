@@ -2,6 +2,7 @@
 #include "repl_parsing.h"
 #include "repl_history.h"
 
+
 int main(int argc, char** argv) {
 
   char* uname  = getenv("USER");
@@ -29,7 +30,10 @@ int main(int argc, char** argv) {
 	goto inputloop;
       }
 
-      
+      if (t->special_call == USER_EXIT) {
+	exit(0);
+      }
+            
       if (t->special_call == BUILTIN_DELETE_HISTORY) {
 
 #ifdef DEBUG_INFO	
@@ -99,26 +103,35 @@ int main(int argc, char** argv) {
       }      
 
       
-      
-      
-      if (t->special_call == RUN_IN_BACKGROUND) {
+      /* CALLING SAFEFORK */
 
+      pid_t pid = safefork();
+
+      if (pid == 0) {
+	execv(t->params[0], t->params);
+	exit(0);
+      }
+      else if (pid > 0) {
+	if (t->special_call == RUN_IN_BACKGROUND) {
 #ifdef DEBUG_INFO
 	printf("CALL TO FORK AND RUN IN BACKGROUD\n");
 #endif
-	history_insert(line_buffer, line_length);
-      }
-
-      else {
-
+	printf("[%d]\n", pid);
+	} else {
 #ifdef DEBUG_INFO
-	printf("CALL TO FORK\n");
-#endif
-	history_insert(line_buffer, line_length);
+	  printf("CALL TO FORK\n");
+#endif	    
+	  int returnStatus;
+	  waitpid(pid, &returnStatus, 0);
+	}
       }
-
+      else {
+	printf("fork error\n");
+      }
+      history_insert(line_buffer, line_length);      
     }
-
+    /* END FORK SECTION  */          
+    
     /* LINE WAS TOO LONG,  */
     
     else {
@@ -128,7 +141,7 @@ int main(int argc, char** argv) {
       line_length = 0;
       fprintf(stderr, "[OOPS!] input exceeded maximum line length of %d characters\n", MAX_LINE_LENGTH);
     }
-
+    
   }
-
+  
 }

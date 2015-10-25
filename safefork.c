@@ -1,16 +1,9 @@
 
-#include <stdlib.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <sys/errno.h>
-
-extern int errno;
-
-#define MAX_PROCESSES 6
+#include "safefork.h"
 
 static int n_processes(void)
 {
-  return system("exit `/bin/ps | /store/bin/wc -l`")/256;
+  return system("exit `/bin/ps | /usr/bin/wc -l`")/256;
 }
 
 pid_t safefork(void)

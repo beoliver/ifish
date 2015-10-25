@@ -79,7 +79,10 @@ struct tokenized* parsing_tokenize_line(char* line, int line_length) {
     /* trying to catch a segfault */
     return NULL;
   }
-
+  if ((strcmp(tokens->params[0],"exit")==0) || (strcmp(tokens->params[0],"quit")==0)) {
+    tokens->special_call = USER_EXIT;
+    return tokens;
+  }
   if (strcmp(tokens->params[0],"h")==0) {
     if (index < 2) {
       printf("no ARGUMENT provided to history\n");
