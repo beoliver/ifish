@@ -2,49 +2,66 @@
 #include "repl_parsing.h"
 #include "repl_history.h"
 
-
 int main(int argc, char** argv) {
 
-  history_init();
-  char* line1 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-  char* line2 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-  char* line3 = "cccccccccccccccccccccccccccccccccccccccccccc";
-  char* line4 = "dddddddddd";
-  char* line5 = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-  char* line6 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-  char* line7 = "gggggggggggggggggggggggggggggggggggggggggggggggggggggggg";
-  char* line8 = "hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh";
-  char* line9 = "iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii";
-  char* line10 = "jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj";
-  char* line11 = "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk";
-  char* line12 = "l";
-  char* line13 = "mmmmmmmmmm";
-  char* line14 = "n";
-  char* line15 = "o";
-
-  history_insert(line1);
-  printf("%s\n", line1);
-  char xs[121];
-  history_delete_last_n_items(1);
-  int i = history_get_item(0, xs);
-  if (i == 0) {
-    printf("%s\n",xs);
-  }
+  char* uname  = getenv("USER");
+  int   command_count = 0;
+  int   line_length;
+  char  line_buffer[LINE_BUFFER_SIZE];
+  char  history_buffer[LINE_BUFFER_SIZE];
   
-  /* history_insert(line3); */
-  /* history_insert(line4); */
-  /* history_insert(line5); */
-  /* history_insert(line6); */
-  /* history_insert(line7); */
-  /* history_insert(line8); */
-  /* history_insert(line9); */
-  /* history_insert(line10); */
-  /* history_insert(line11); */
-  /* history_insert(line12); */
-  /* history_insert(line13); */
-  /* history_insert(line14); */
-  /* history_insert(line15); */
+  history_init();
+
+ loop:while (1) {
+   
+    fprintf(stdout, "%s@ifish %d > ", uname, command_count);
+    fgets(line_buffer, LINE_BUFFER_SIZE, stdin);
+    if (feof(stdin)) {fputc('\n', stdout); exit(0);}
+    command_count++ ;
+
+    /* check that the input line is not TOO long    */
+    
+    if ((line_length = strlen(line_buffer)) <= MAX_LINE_LENGTH) {
+      struct tokenized* t = parsing_tokenize_line(line_buffer, line_length);
+      if (t == NULL) {
+	printf("invalid command\n");
+	goto loop;
+      }
+      if (t->special_call == BUILTIN_DELETE_HISTORY) {
+	int n = atoi(t->params[2]);
+#ifdef DEBUG		
+	printf("CALL TO DELETE HISTORY\n");
+#endif
+	history_delete_last_n_items(n);
+	history_insert(line_buffer, line_length);
+      }
+      else if (t->special_call == BUILTIN_EXECUTE_HISTORY) {
+	int n = atoi(t->params[1]);
+	history_insert(line_buffer, line_length);
+#ifdef DEBUG	
+	printf("CALL TO EXECUTE HISTORY COMMAND : %d\n", n);
+#endif
+      }
+      else if (t->special_call == RUN_IN_BACKGROUND) {
+#ifdef DEBUG	
+	printf("CALL TO FORK AND RUN IN BACKGROUD\n");
+#endif
+	history_insert(line_buffer, line_length);
+      } else {
+#ifdef DEBUG	
+	printf("CALL TO FORK\n");
+#endif
+	history_insert(line_buffer, line_length);
+      }
+    } else {
+      /* read from buffer to empty previoius input  */
+      /* VERY IMPORTANT                             */      
+      while (fgetc(stdin) != '\n') {}
+      line_length = 0;
+      fprintf(stderr, "[OOPS!] input exceeded maximum line length of %d characters\n", MAX_LINE_LENGTH);
+    }
+
+  }
+
+  
 }
-
-
-

@@ -239,9 +239,8 @@ void history_init() {
 
 /* --------------------------------------------------------------------------- */
 
-void history_insert(char* line) {
+void history_insert(char* line, int len) {
   
-  int len = strlen(line);
   int blocks_required = (len % 8) ? 1+(len / 8) : (len / 8);
   
 #ifdef DEBUG_INFO
@@ -369,6 +368,7 @@ int history_delete_last_n_items(int n) {
     if (ret == (-1)) {
       return (-1);
     }
+    n--;
   }
   return 0;
 }

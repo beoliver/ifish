@@ -6,8 +6,8 @@
 #include "repl.h"
 
 void history_init();
-void history_insert(char*);
+void history_insert(char*, int);
 int  history_get_item(int, char*);
-int history_delete_last_n_items(int);
+int  history_delete_last_n_items(int);
 
 #endif
