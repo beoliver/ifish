@@ -27,7 +27,7 @@ When a line is passed to ```parsing_tokenize_line``` a struct of type ```struct 
 This has two fields ```char* params[21]``` and ```char special_call```.
 The linebuffer is read and copied into into an array of type ```char* params[21]```
 If the first symbol is ```h``` then the tokens are parsed to make sure that they are a valid **history** call.
-If so, the ```token->special_call``` field is set to either ```BUILTIN_DELETE_HISTORY``` or ```BUILTIN_EXECUTE_HISTORY]```
+If so, the ```token->special_call``` field is set to either ```BUILTIN_DELETE_HISTORY``` or ```BUILTIN_EXECUTE_HISTORY```
 and the token struct is returned.
 If there are semantic errors then ```NULL``` is returned.
 If the first token is **"exit"** or **"quit"** then the ```token->special_call```
