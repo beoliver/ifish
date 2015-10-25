@@ -13,16 +13,16 @@
 /* #define DEBUG_STRICT */
 /* #define DEBUG_INFO */
 /* #define CLEAN_DATABLOCKS */
-/* #define DONT_FORK_BOMB_YOURSELF */
 
 #define DEBUG_OUT stderr
 
 #define MAX_LINE_LENGTH 120
 #define LINE_BUFFER_SIZE 121
 
+#define NOFLAG                  0
 #define BUILTIN_DELETE_HISTORY  1
 #define BUILTIN_EXECUTE_HISTORY 2
 #define RUN_IN_BACKGROUND       3
 #define USER_EXIT               4
-
+#define UNKNOWN_COMMAND         5
 #endif

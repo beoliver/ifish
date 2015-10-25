@@ -3,6 +3,7 @@
 
 static char* search_user_path(char*);
 
+
 /* free the token (remember that we have an array of pointers) */
 
 void parsing_free(struct tokenized* t) {
@@ -16,100 +17,114 @@ void parsing_free(struct tokenized* t) {
   }
 }
 
-/* DO NOT allow history calls in the background ie "h &" */
+
+
+/* we DO NOT allow history calls in the background ie "h &" */
 
 struct tokenized* parsing_tokenize_line(char* line, int line_length) {
   
-  if (line == NULL) {
-    return NULL;
-  }
-    
-  if (line_length == 0) {
-    return NULL;
-  }
-
-  if (line[0] == '\n') {
+  if ((line == NULL) || (line_length == 0) || (line[0] == '\n')) {
     return NULL;
   }
 
   struct tokenized* tokens = malloc (sizeof(struct tokenized));
-  tokens->special_call = 0;
-  
-  int    tok_length = 0;
-  int    index      = 0;
-  char*  tok_start  = line;
-  char*  tok_curr   = line;
-  int    char_pos;  
-  
-  for (char_pos = 0; char_pos < line_length+1; char_pos++) {
-    
-    if ((*tok_curr == ' ') || (*tok_curr == '\n') || (*tok_curr == 0)) {
+  int   token_length       = 0;
+  int   arg_index          = 0;
+  char* token_start        = line;
+  char* p                  = line;
 
-      if (tok_length != 0) {
-	
-	int malloc_size = tok_length + 1;
-	tokens->params[index] = malloc(sizeof(char)*malloc_size);
-	stpncpy(tokens->params[index], tok_start, tok_length);
-	/* set last byte to 0 */
-	tokens->params[index][tok_length] = '\0';
-	
-#ifdef DEBUG_INFO
-	fprintf(stderr, "token: %s\n", tokens->params[index]);
-#endif
-	
-	tok_length = 0;
-	index++;
-      }
-      /* increment pointer and set new start position  */
-      /* this is also done if we encounter multiple while spaces */
-      tok_curr++;
-      tok_start = tok_curr;
+  for (int i = 0; i < line_length+1; i++) {
+    if ((isspace(*p) || (*p == 0)) && (token_length > 0)) {     
+      tokens->params[arg_index] = malloc(sizeof(char) * (token_length + 1));
+      stpncpy(tokens->params[arg_index], token_start, token_length);
+      token_length = 0;
+      arg_index++;
+    }
+    p++;                /* we increment pointer every time */
+    if (isspace(*(p-1))) {
+      token_start = p;  /* move position pointer 'p' forwards,set 'token_start' */
     } else {
-      /* *tok_curr is not whitespace */
-      tok_curr++;
-      tok_length++;
+      token_length++;   /* still matching against a token */
     }
   }
-  
-  tokens->params[index] = 0;
-
-  if (index == 0) {
-    /* most likely there was more than one space at beginning of line */
-    /* but NO arguments */
-    /* trying to catch a segfault */
+ 
+  if (arg_index == 0) {
     parsing_free(tokens);
     return NULL;
   }
-  if ((strcmp(tokens->params[0],"exit")==0) || (strcmp(tokens->params[0],"quit")==0)) {
-    tokens->special_call = USER_EXIT;
+
+  if ((strcmp(tokens->params[0],"exit")==0) ||
+      (strcmp(tokens->params[0],"quit")==0)) {    
+    tokens->flag = USER_EXIT;
     return tokens;
   }
+
+  /* need find out where to 'end' the array of pointers       */
+  /* need find out if we should run in background             */
+
+  char* last_ampas = rindex(tokens->params[arg_index-1], '&');
+    
+  if (last_ampas == NULL) {
+    tokens->params[arg_index] = 0;
+    tokens->flag = NOFLAG;
+  }
+  /* from now on we know that there was a bakground flag '&' */
+  else if  (strlen(tokens->params[arg_index-1]) == 1) {
+    tokens->params[arg_index-1] = 0;
+    tokens->flag = RUN_IN_BACKGROUND;
+  } else {
+    *last_ampas = 0;
+    tokens->params[arg_index] = 0;
+    tokens->flag = RUN_IN_BACKGROUND;
+  }
+
+  /* we now want to check for a call to history.  */
+
+  
   if (strcmp(tokens->params[0],"h")==0) {
-    if (index < 2) {
-      printf("no ARGUMENT provided to history\n");
+    
+    if (arg_index < 2) {
       parsing_free(tokens);
       return NULL;
     }
-    else if (index == 2) {
+    
+    else if (arg_index == 2) {
       if (isnumber(tokens->params[1][0]) && (tokens->params[2] == 0)) {
-	tokens->special_call = BUILTIN_EXECUTE_HISTORY;
+	if (tokens->flag == RUN_IN_BACKGROUND) {
+	  parsing_free(tokens);
+	  return NULL;
+	}
+	tokens->flag = BUILTIN_EXECUTE_HISTORY;
 	return tokens;
-      } else {parsing_free(tokens); return NULL;}
+      } else {
+	parsing_free(tokens);
+	return NULL;
+      }
     }
-    else if (index == 3) {
+    
+    else if (arg_index == 3) {
       if ((strcmp(tokens->params[1],"-d")==0) &&
 	  isnumber(tokens->params[2][0]) &&
 	  (tokens->params[3] == 0)) {
-	tokens->special_call = BUILTIN_DELETE_HISTORY;
+	if (tokens->flag == RUN_IN_BACKGROUND) {
+	  parsing_free(tokens);
+	  return NULL;
+	}
+	tokens->flag = BUILTIN_DELETE_HISTORY;
 	return tokens;
-      } else  {parsing_free(tokens); return NULL;}
+      } else  {
+	parsing_free(tokens);
+	return NULL;
+      }
     }
-    else {parsing_free(tokens); return NULL;}
+    
+    else {
+      parsing_free(tokens);
+      return NULL;
+    }
   }
-  if (strcmp(tokens->params[index-1],"&")==0) {
-    tokens->special_call = RUN_IN_BACKGROUND;
-  }
-  
+
+  /* end of testing for history */    
   /* builtin calls have been returned... we can now parse the first arg */
   /* as this will be a forked call */
 
@@ -126,12 +141,13 @@ struct tokenized* parsing_tokenize_line(char* line, int line_length) {
   
   char* path = search_user_path(tokens->params[0]);
 
-  if (path == NULL) {
 #ifdef DEBUG_INFO
-  printf("PATH == NULL\n");
+    printf("PATH == : %s\n", path);
 #endif
-  parsing_free(tokens); 
-  return NULL;
+
+  if (path == NULL) {
+    tokens->flag = UNKNOWN_COMMAND;
+    return tokens;
   }
 
   if (path == tokens->params[0]) {
@@ -141,12 +157,9 @@ struct tokenized* parsing_tokenize_line(char* line, int line_length) {
     return tokens;
   }
 
-  free(tokens->params[0]);
-
-#ifdef DEBUG_INFO
-    printf("PATH == : %s\n", path);
-#endif
+  /* finally, we switch the old token with the full path */
   
+  free(tokens->params[0]);  
   tokens->params[0] = path;
   return tokens;  
 }

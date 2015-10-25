@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
   
   history_init();
 
- inputloop:while (1) {
+ top:while (1) {
    
     fprintf(stdout, "%s@ifish %d > ", uname, command_count);
     fgets(line_buffer, LINE_BUFFER_SIZE, stdin);
@@ -23,18 +23,24 @@ int main(int argc, char** argv) {
 
     /* check that the input line is not TOO long    */
     
-  replloop:if ((line_length = strlen(line_buffer)) <= MAX_LINE_LENGTH) {
+    if ((line_length = strlen(line_buffer)) <= MAX_LINE_LENGTH) {
       struct tokenized* t = parsing_tokenize_line(line_buffer, line_length);
       if (t == NULL) {
 	/* printf("invalid command\n"); */
-	goto inputloop;
+	goto top;
       }
 
-      if (t->special_call == USER_EXIT) {
+      if (t->flag == USER_EXIT) {
 	exit(0);
       }
-            
-      if (t->special_call == BUILTIN_DELETE_HISTORY) {
+
+      if (t->flag == UNKNOWN_COMMAND) {
+	printf("unknown command: %s\n", t->params[0]);
+	parsing_free(t);
+	goto top;
+      }
+
+      if (t->flag == BUILTIN_DELETE_HISTORY) {
 
 #ifdef DEBUG_INFO	
 	printf("CALL TO DELETE HISTORY\n");
@@ -42,7 +48,7 @@ int main(int argc, char** argv) {
 	
 	/* to delete from history, we delete items   */
 	/* and then add the line to the history      */
-	
+
 	int n = atoi(t->params[2]);	
 	int hd = history_delete_last_n_items(n);	
 	history_insert(line_buffer, line_length);
@@ -50,13 +56,13 @@ int main(int argc, char** argv) {
 	if (hd != 0) {
 	  printf("YOU DONT HAVE THAT MUCH HISTORY -- what are you trying to hide?\n");
 	}
-	
+
 	parsing_free(t);
-	goto inputloop;
+	goto top;
       }
 
       
-      if (t->special_call == BUILTIN_EXECUTE_HISTORY) {
+      if (t->flag == BUILTIN_EXECUTE_HISTORY) {
 
 	/* this is where we have to be carefull. It is possible           */
 	/* that we enter an infinite loop by making continuous            */
@@ -87,19 +93,15 @@ int main(int argc, char** argv) {
 
 	if (h != 0) {
 	  printf("NO HISTORY ITEM: %d", n);
-	  goto inputloop;
+	  goto top;
 	} else {
 	  line_length = strlen(line_buffer);
 	  t = parsing_tokenize_line(line_buffer, line_length);
-	  if (t->special_call == BUILTIN_EXECUTE_HISTORY) {
+	  if (t->flag == BUILTIN_EXECUTE_HISTORY) {
 	    printf("NO RECURSIVE HISTORY CALLS ALLOWED!\n");
 	    parsing_free(t);
-	    goto inputloop;
+	    goto top;
 	  } else {
-	    /* we can just continue as we have a new tokenized line. */
-	    /* we just add the new line to history */
-	    /* parsing_free(t); */
-	    /* goto replloop; */
 	  }
 	}
       }
@@ -111,10 +113,11 @@ int main(int argc, char** argv) {
 
       if (pid == 0) {
 	execv(t->params[0], t->params);
+	fputc('\n', stdout);
 	exit(0);
       }
       else if (pid > 0) {
-	if (t->special_call == RUN_IN_BACKGROUND) {
+	if (t->flag == RUN_IN_BACKGROUND) {
 #ifdef DEBUG_INFO
 	printf("CALL TO FORK AND RUN IN BACKGROUD\n");
 #endif	

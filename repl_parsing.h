@@ -5,8 +5,8 @@
 #include "repl.h"
 
 struct tokenized {
-  char*  params[21];
-  char   special_call;
+  char* params[21];
+  char  flag;
 } ;
 
 struct tokenized* parsing_tokenize_line(char*, int);
