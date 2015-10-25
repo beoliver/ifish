@@ -9,8 +9,7 @@ struct tokenized {
   char   special_call;
 } ;
 
-char*             search_user_path(char*);
 struct tokenized* parsing_tokenize_line(char*, int);
-
+void parsing_free(struct tokenized*);
   
 #endif

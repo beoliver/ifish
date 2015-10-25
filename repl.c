@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
 	  printf("YOU DONT HAVE THAT MUCH HISTORY -- what are you trying to hide?\n");
 	}
 	
-	free(t);
+	parsing_free(t);
 	goto inputloop;
       }
 
@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
 	history_insert(line_buffer, line_length);
 		
 	int h = history_get_item(n, line_buffer);		
-	free(t);
+	parsing_free(t);
 
 	if (h != 0) {
 	  printf("NO HISTORY ITEM: %d", n);
@@ -89,16 +89,17 @@ int main(int argc, char** argv) {
 	  t = parsing_tokenize_line(line_buffer, line_length);
 	  if (t->special_call == BUILTIN_EXECUTE_HISTORY) {
 	    printf("NO RECURSIVE HISTORY CALLS ALLOWED!\n");
-	    free(t);
+	    parsing_free(t);
 	    goto inputloop;
 	  } else {
-	    free(t);
+	    parsing_free(t);
 	    goto replloop;
 	  }
 	}
       }      
 
-
+      
+      
       
       if (t->special_call == RUN_IN_BACKGROUND) {
 

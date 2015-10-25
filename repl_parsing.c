@@ -1,11 +1,25 @@
 #include "repl_parsing.h"
 #include <sys/stat.h>
 
+static char* search_user_path(char*);
+
+/* free the token (remember that we have an array of pointers) */
+
+void parsing_free(struct tokenized* t) {
+  if (t == NULL) {
+    return;  
+  }
+  for (int i = 0; i < 21; i++) {
+    free(t->params[i]);
+    free(t);
+    return;
+  }
+}
+
 /* DO NOT allow history calls in the background ie "h &" */
 
-
 struct tokenized* parsing_tokenize_line(char* line, int line_length) {
-
+  
   if (line == NULL) {
     return NULL;
   }
@@ -90,7 +104,45 @@ struct tokenized* parsing_tokenize_line(char* line, int line_length) {
   if (strcmp(tokens->params[index-1],"&")==0) {
     tokens->special_call = RUN_IN_BACKGROUND;
   }
-  return tokens;
+  
+  /* builtin calls have been returned... we can now parse the first arg */
+  /* as this will be a forked call */
+
+#ifdef DEBUG_INFO
+  printf("testing first token for path\n");
+#endif
+
+  if (tokens == NULL) {
+#ifdef DEBUG_INFO
+  printf("TOKENS == NULL\n");
+#endif    
+    return NULL;
+  }
+  
+  char* path = search_user_path(tokens->params[0]);
+
+  if (path == NULL) {
+#ifdef DEBUG_INFO
+  printf("PATH == NULL\n");
+#endif
+    return NULL;
+  }
+
+  if (path == tokens->params[0]) {
+#ifdef DEBUG_INFO
+    printf("PATH == PARAMS[0] : %s\n", path);
+#endif
+    return tokens;
+  }
+
+  free(tokens->params[0]);
+
+#ifdef DEBUG_INFO
+    printf("PATH == : %s\n", path);
+#endif
+  
+  tokens->params[0] = path;
+  return tokens;  
 }
 
 
@@ -98,7 +150,7 @@ struct tokenized* parsing_tokenize_line(char* line, int line_length) {
 
 
 
-char* search_user_path(char* param) {
+static char* search_user_path(char* param) {
 
   /* do we need to expose this? we could use it statically and call it from */
   /*      tokenize line.  */
@@ -112,7 +164,7 @@ char* search_user_path(char* param) {
   /* the line as a direct call. We return a copy of it      */
 
   if (index(param, '/') != NULL) {
-    return strdup(param);
+    return param;
   }
   
   while (1) {
@@ -132,6 +184,9 @@ char* search_user_path(char* param) {
       /* test if executable exists */
       struct stat fileStat;
       if (stat(path, &fileStat) >= 0) {
+#ifdef DEBUG_INFO
+    printf("(stat(path, &fileStat) >= 0) : %s\n", path);
+#endif
 	return path;
       } 
 

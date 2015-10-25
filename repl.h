@@ -9,8 +9,8 @@
 #include <ctype.h>
 
 #define DEBUG
-/* #define DEBUG_STRICT */
-/* #define DEBUG_INFO */
+#define DEBUG_STRICT
+#define DEBUG_INFO
 #define CLEAN_DATABLOCKS
 #define DONT_FORK_BOMB_YOURSELF
 
