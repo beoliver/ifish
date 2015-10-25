@@ -96,11 +96,13 @@ int main(int argc, char** argv) {
 	    parsing_free(t);
 	    goto inputloop;
 	  } else {
-	    parsing_free(t);
-	    goto replloop;
+	    /* we can just continue as we have a new tokenized line. */
+	    /* we just add the new line to history */
+	    /* parsing_free(t); */
+	    /* goto replloop; */
 	  }
 	}
-      }      
+      }
 
       
       /* CALLING SAFEFORK */
@@ -115,18 +117,21 @@ int main(int argc, char** argv) {
 	if (t->special_call == RUN_IN_BACKGROUND) {
 #ifdef DEBUG_INFO
 	printf("CALL TO FORK AND RUN IN BACKGROUD\n");
-#endif
+#endif	
 	printf("[%d]\n", pid);
+	parsing_free(t);
 	} else {
 #ifdef DEBUG_INFO
 	  printf("CALL TO FORK\n");
-#endif	    
+#endif
+	  parsing_free(t);
 	  int returnStatus;
 	  waitpid(pid, &returnStatus, 0);
 	}
       }
       else {
 	printf("fork error\n");
+	parsing_free(t);
       }
       history_insert(line_buffer, line_length);      
     }
