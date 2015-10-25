@@ -4,10 +4,6 @@
 
 #include "repl.h"
 
-#define BUILTIN_DELETE_HISTORY  1
-#define BUILTIN_EXECUTE_HISTORY 2
-#define RUN_IN_BACKGROUND       3
-
 struct tokenized {
   char*  params[21];
   char   special_call;
