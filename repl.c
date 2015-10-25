@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
       }
       if (t->special_call == BUILTIN_DELETE_HISTORY) {
 	int n = atoi(t->params[2]);
-#ifdef DEBUG		
+#ifdef DEBUG_INFO	
 	printf("CALL TO DELETE HISTORY\n");
 #endif
 	history_delete_last_n_items(n);
@@ -37,18 +37,18 @@ int main(int argc, char** argv) {
       }
       else if (t->special_call == BUILTIN_EXECUTE_HISTORY) {
 	int n = atoi(t->params[1]);
-	history_insert(line_buffer, line_length);
-#ifdef DEBUG	
+#ifdef DEBUG_INFO	
 	printf("CALL TO EXECUTE HISTORY COMMAND : %d\n", n);
 #endif
+	history_insert(line_buffer, line_length);
       }
       else if (t->special_call == RUN_IN_BACKGROUND) {
-#ifdef DEBUG	
+#ifdef DEBUG_INFO
 	printf("CALL TO FORK AND RUN IN BACKGROUD\n");
 #endif
 	history_insert(line_buffer, line_length);
       } else {
-#ifdef DEBUG	
+#ifdef DEBUG_INFO
 	printf("CALL TO FORK\n");
 #endif
 	history_insert(line_buffer, line_length);
