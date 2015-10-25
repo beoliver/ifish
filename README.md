@@ -21,6 +21,6 @@ All other functions in ```repl_history``` are static.
 
 ```repl_parsing``` handles both searching the users path and tokenizing lines. It provides the following interface:
 ```
-char*        parsing_search_path(char*)
-repl_params* parsing_tokenize(char*)
+char*      parsing_search_path(char*)
+tokenized* parsing_tokenize_line(char*)
 ```
