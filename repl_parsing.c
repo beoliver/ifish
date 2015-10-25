@@ -77,6 +77,7 @@ struct tokenized* parsing_tokenize_line(char* line, int line_length) {
     /* most likely there was more than one space at beginning of line */
     /* but NO arguments */
     /* trying to catch a segfault */
+    parsing_free(tokens);
     return NULL;
   }
   if ((strcmp(tokens->params[0],"exit")==0) || (strcmp(tokens->params[0],"quit")==0)) {
@@ -86,23 +87,24 @@ struct tokenized* parsing_tokenize_line(char* line, int line_length) {
   if (strcmp(tokens->params[0],"h")==0) {
     if (index < 2) {
       printf("no ARGUMENT provided to history\n");
+      parsing_free(tokens);
       return NULL;
     }
-    if (index == 2) {
+    else if (index == 2) {
       if (isnumber(tokens->params[1][0]) && (tokens->params[2] == 0)) {
 	tokens->special_call = BUILTIN_EXECUTE_HISTORY;
 	return tokens;
-      } else {return NULL;}
+      } else {parsing_free(tokens); return NULL;}
     }
-    if (index == 3) {
+    else if (index == 3) {
       if ((strcmp(tokens->params[1],"-d")==0) &&
 	  isnumber(tokens->params[2][0]) &&
 	  (tokens->params[3] == 0)) {
 	tokens->special_call = BUILTIN_DELETE_HISTORY;
 	return tokens;
-      } else  {return NULL;}
+      } else  {parsing_free(tokens); return NULL;}
     }
-    return NULL;
+    else {parsing_free(tokens); return NULL;}
   }
   if (strcmp(tokens->params[index-1],"&")==0) {
     tokens->special_call = RUN_IN_BACKGROUND;
@@ -118,8 +120,8 @@ struct tokenized* parsing_tokenize_line(char* line, int line_length) {
   if (tokens == NULL) {
 #ifdef DEBUG_INFO
   printf("TOKENS == NULL\n");
-#endif    
-    return NULL;
+#endif
+  return NULL;
   }
   
   char* path = search_user_path(tokens->params[0]);
@@ -128,7 +130,8 @@ struct tokenized* parsing_tokenize_line(char* line, int line_length) {
 #ifdef DEBUG_INFO
   printf("PATH == NULL\n");
 #endif
-    return NULL;
+  parsing_free(tokens); 
+  return NULL;
   }
 
   if (path == tokens->params[0]) {
