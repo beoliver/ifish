@@ -110,7 +110,7 @@ int main(int argc, char** argv) {
       /* CALLING SAFEFORK */
 
       pid_t pid = safefork();
-
+      
       if (pid == 0) {
 	execv(t->params[0], t->params);
 	fputc('\n', stdout);
